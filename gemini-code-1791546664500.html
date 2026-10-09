@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>카드 실적 & 혜택 매니저</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1971c2">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="카드매니저">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/9334/9334583.png">
+
+  <style>
+    :root {
+      --primary: #1971c2;
+      --primary-dark: #1864ab;
+      --gauge-fill: #4dabf7;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --border: #dee2e6;
+      --text: #212529;
+      --text-muted: #868e96;
+      --success: #2b8a3e;
+      --danger: #c92a2a;
+      --warn: #e67700;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Pretendard", sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 16px; line-height: 1.5; padding-bottom: 50px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    header { margin-bottom: 16px; text-align: center; }
+    h1 { margin: 0 0 4px 0; font-size: 20px; font-weight: 700; }
+    p.desc { margin: 0; color: var(--text-muted); font-size: 13px; }
+    
+    .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .card-select-group { display: flex; flex-direction: column; gap: 6px; }
+    .card-select-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    select, input, button { font-family: inherit; font-size: 15px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; width: 100%; }
+    select:focus, input:focus { outline: none; border-color: var(--primary); }
+
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .summary-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .summary-card.full { grid-column: span 2; }
+    .summary-card .label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .summary-card .value { font-size: 18px; font-weight: 700; color: var(--text); }
+    .summary-card .subtext { font-size: 11px; font-weight: 600; }
+
+    /* 하늘색 게이지 바 */
+    .progress-track { width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+    .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #74c0fc, var(--gauge-fill)); border-radius: 4px; transition: width 0.4s ease; }
+
+    .input-form { display: flex; flex-direction: column; gap: 10px; }
+    button.btn-primary { background: var(--primary); color: #fff; font-weight: 600; border: none; cursor: pointer; padding: 12px; }
+    button.btn-primary:active { background: var(--primary-dark); }
+    button.btn-del { background: transparent; border: none; color: var(--danger); cursor: pointer; padding: 4px 6px; font-size: 14px; }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th { background: #f1f3f5; color: #495057; padding: 8px 10px; border-bottom: 2px solid var(--border); font-weight: 600; }
+    td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    .badge-ok { background: #ebfbee; color: var(--success); }
+    .badge-no { background: #fff5f5; color: var(--danger); }
+    .badge-warn { background: #fff9db; color: var(--warn); }
+    .rule-info { font-size: 12px; color: #1864ab; background: #e7f5ff; padding: 10px 12px; border-radius: 6px; margin-top: 10px; border-left: 3px solid var(--primary); word-break: keep-all; }
+    .empty-state { text-align: center; padding: 24px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>💳 카드 실적 & 혜택 매니저</h1>
+    <p class="desc">카드별 실시간 게이지 및 맞춤형 혜택 트래커</p>
+  </header>
+
+  <!-- 카드 선택 -->
+  <div class="panel">
+    <div class="card-select-group">
+      <label for="cardSelect">조회 및 관리할 카드</label>
+      <select id="cardSelect"></select>
+    </div>
+    <div class="rule-info" id="ruleGuide">약관 가이드를 불러오는 중입니다.</div>
+  </div>
+
+  <!-- 대시보드 지표 및 게이지 -->
+  <div class="summary-grid">
+    <div class="summary-card">
+      <span class="label">인정 실적 달성도</span>
+      <span class="value" id="displayPerf">0원</span>
+      <span class="subtext" id="statusPerf">집계 대기</span>
+      <div class="progress-track">
+        <div class="progress-bar" id="perfGauge"></div>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="label">챙긴 혜택 한도</span>
+      <span class="value" id="displayBenefit">0원</span>
+      <span class="subtext" id="statusBenefit" style="color: var(--primary);">한도 정상</span>
+      <div class="progress-track">
+        <div class="progress-bar" id="benefitGauge"></div>
+      </div>
+    </div>
+    <div class="summary-card full">
+      <span class="label">총 결제 승인액</span>
+      <span class="value" id="displaySpent">0원</span>
+      <span class="subtext" style="color: var(--text-muted);">실제 카드 사용 총액</span>
+    </div>
+  </div>
+
+  <!-- 수기 입력 (해당 카드 전용 옵션 동적 바인딩) -->
+  <div class="panel">
+    <h3 style="margin: 0 0 10px 0; font-size: 15px;">결제 내역 추가</h3>
+    <form id="recordForm" class="input-form">
+      <input type="text" id="merchantInput" placeholder="가맹점명 (예: 배달의민족, SK주유소, SKT)" required>
+      <input type="number" id="amountInput" placeholder="결제금액 (원)" inputmode="numeric" required>
+      <select id="categoryInput"></select>
+      <button type="submit" class="btn-primary">입력 완료</button>
+    </form>
+  </div>
+
+  <!-- 결제 리스트 -->
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <h3 style="margin: 0; font-size: 15px;">등록 내역</h3>
+      <button id="clearBtn" style="font-size: 12px; color: var(--text-muted); background: none; border: none; cursor: pointer; text-decoration: underline; width: auto; padding: 0;">비우기</button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>가맹점</th>
+            <th>금액</th>
+            <th>혜택</th>
+            <th>실적</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+
+  // 12종 카드 데이터베이스 및 카드별 전용 옵션
+  const CARD_DATABASE = {
+    kb_biz: {
+      name: "KB국민 탄탄대로 Biz 티타늄",
+      targetPerf: 400000,
+      hasTarget: true,
+      maxBenefit: 70000,
+      benefitUnit: "포인트",
+      guide: "주유·마트 적립 결제건은 실적 제외되나, 통신/4대보험/전기/가스 및 O2O(배달앱)는 혜택과 실적 모두 인정됩니다.",
+      options: [
+        { value: "AUTO", label: "자동 판정 (가맹점명 기준)" },
+        { value: "KB_O2O", label: "O2O 배달앱 10% 적립 [혜택O, 실적인정]" },
+        { value: "OIL", label: "주유소 적립 [혜택O, 실적제외]" },
+        { value: "KB_MART", label: "대형마트/하나로마트 적립 [혜택O, 실적제외]" },
+        { value: "KB_SAFE", label: "통신/4대보험/전기/가스 [혜택O, 실적인정]" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || merchant.includes('상품권') || merchant.includes('기프트')) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        if (cat === 'KB_O2O' || ['배달의민족', '배민', '요기요', '마켓컬리'].some(k => merchant.includes(k))) {
+          return { isPerf: true, benefit: Math.round(amount * 0.10), reason: 'O2O 10% (실적인정)' };
+        }
+        if (cat === 'OIL' || merchant.includes('주유')) return { isPerf: false, benefit: Math.round(amount * 0.08), reason: '주유 (실적제외)' };
+        if (cat === 'KB_MART' || ['이마트', '홈플러스', '롯데마트', '하나로'].some(k => merchant.includes(k))) return { isPerf: false, benefit: Math.round(amount * 0.05), reason: '마트 (실적제외)' };
+        if (cat === 'KB_SAFE' || ['통신', 'SKT', 'KT', 'LGU', '건강보험', '국민연금', '전기', '도시가스'].some(k => merchant.includes(k))) return { isPerf: true, benefit: Math.round(amount * 0.05), reason: '공과금/통신 (실적인정)' };
+        return { isPerf: true, benefit: 0, reason: '일반실적' };
+      }
+    },
+    kb_miz: {
+      name: "KB국민 탄탄대로 Miz&Mr 티타늄",
+      targetPerf: 400000,
+      hasTarget: true,
+      maxBenefit: 70000,
+      benefitUnit: "할인",
+      guide: "Trendy(백화점, SPA, 마트 등) 할인 건은 실적 제외, Daily(카페, 베이커리 등)는 실적에 포함됩니다.",
+      options: [
+        { value: "AUTO", label: "자동 판정 (가맹점명 기준)" },
+        { value: "KB_TRENDY", label: "Trendy 백화점/SPA/마트 [할인O, 실적제외]" },
+        { value: "KB_DAILY", label: "Daily 카페/외식/베이커리 [할인O, 실적인정]" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || merchant.includes('상품권')) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        if (cat === 'KB_TRENDY' || ['백화점', '자라', 'H&M'].some(k => merchant.includes(k))) return { isPerf: false, benefit: Math.round(amount * 0.20), reason: 'Trendy (실적제외)' };
+        if (cat === 'KB_DAILY' || ['스타벅스', '커피', '투썸'].some(k => merchant.includes(k))) return { isPerf: true, benefit: Math.round(amount * 0.10), reason: 'Daily (실적인정)' };
+        return { isPerf: true, benefit: 0, reason: '일반실적' };
+      }
+    },
+    shinhan_lady: {
+      name: "신한 The LADY CLASSIC",
+      targetPerf: 300000,
+      hasTarget: true,
+      maxBenefit: 50000,
+      benefitUnit: "캐시백",
+      guide: "병원/약국/서점(5%)은 실적인정, 학원(5%)은 캐시백만 제공되고 실적에서 제외됩니다.",
+      options: [
+        { value: "AUTO", label: "자동 판정 (가맹점명 기준)" },
+        { value: "HOSPITAL", label: "병원/약국/서점 5% 캐시백 [실적인정]" },
+        { value: "ACADEMY", label: "학원비 5% 캐시백 [실적제외]" },
+        { value: "SHOPPING", label: "대형마트/백화점/온라인 3% 캐시백 [실적인정]" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || merchant.includes('상품권')) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        if (cat === 'ACADEMY' || merchant.includes('학원')) return { isPerf: false, benefit: Math.round(amount * 0.05), reason: '학원 5% (실적제외)' };
+        if (cat === 'HOSPITAL' || ['병원', '치과', '약국', '서점'].some(k => merchant.includes(k))) return { isPerf: true, benefit: Math.round(amount * 0.05), reason: '병원·약국 5% (실적인정)' };
+        if (cat === 'SHOPPING' || ['마트', '백화점', '11번가', 'G마켓'].some(k => merchant.includes(k))) return { isPerf: true, benefit: Math.round(amount * 0.03), reason: '쇼핑 3% (실적인정)' };
+        return { isPerf: true, benefit: 0, reason: '일반실적' };
+      }
+    },
+    samsung_toss: {
+      name: "토스 삼성카드",
+      targetPerf: 400000,
+      hasTarget: true,
+      maxBenefit: 30000,
+      benefitUnit: "토스P",
+      guide: "토스페이 결제 시 추가 적립. 세금, 공과금, 아파트관리비, 상품권은 실적/적립 제외.",
+      options: [
+        { value: "AUTO", label: "자동 판정 (가맹점명 기준)" },
+        { value: "TOSS_PAY", label: "토스페이 결제 3% 적립" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['국세', '지방세', '관리비', '공과금', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        if (cat === 'TOSS_PAY' || merchant.includes('토스')) return { isPerf: true, benefit: Math.round(amount * 0.03), reason: '토스 3% 적립' };
+        return { isPerf: true, benefit: Math.round(amount * 0.005), reason: '기본적립' };
+      }
+    },
+    kb_tokmafo: {
+      name: "KB국민 톡톡 my point",
+      targetPerf: 200000,
+      hasTarget: false,
+      maxBenefit: 10000,
+      benefitUnit: "포인트",
+      guide: "전월 실적 요구조건 없음. KB Pay 결제 시 월 20만 원 한도 내 5.5% 최적 적립.",
+      options: [
+        { value: "KBPAY", label: "KB Pay 결제 (5.5% 최적 적립)" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || merchant.includes('상품권')) return { isPerf: true, benefit: 0, reason: '적립제외' };
+        return { isPerf: true, benefit: Math.round(amount * 0.055), reason: 'KB Pay 5.5%' };
+      }
+    },
+    bc_goat: {
+      name: "BC 바로 GOAT 카드",
+      targetPerf: 0,
+      hasTarget: false,
+      maxBenefit: null,
+      benefitUnit: "페이북",
+      guide: "전월 실적 조건 없이 국내 1.5% 무제한 적립 (공과금/상품권 제외).",
+      options: [
+        { value: "GOAT_MAIN", label: "국내 가맹점 1.5% 무제한 적립" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['공과금', '관리비', '상품권'].some(k => merchant.includes(k))) return { isPerf: true, benefit: 0, reason: '적립제외' };
+        return { isPerf: true, benefit: Math.round(amount * 0.015), reason: '1.5% 무제한' };
+      }
+    },
+    mg_better: {
+      name: "MG 새마을금고 더나은 체크",
+      targetPerf: 300000,
+      hasTarget: true,
+      maxBenefit: 12000,
+      benefitUnit: "캐시백",
+      guide: "전월 실적 30만 원 충족 시 간편결제(네이버/카카오/페이코) 20% 캐시백.",
+      options: [
+        { value: "AUTO", label: "자동 판정 (가맹점명 기준)" },
+        { value: "PAY_ONLINE", label: "간편결제 (네이버/카카오/페이코) 20%" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['국세', '지방세', '상품권', '공과금'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        if (cat === 'PAY_ONLINE' || ['페이코', '카카오페이', '네이버페이'].some(k => merchant.includes(k))) return { isPerf: true, benefit: Math.round(amount * 0.20), reason: '간편결제 20%' };
+        return { isPerf: true, benefit: 0, reason: '일반실적' };
+      }
+    },
+    samsung_1: {
+      name: "삼성카드 1",
+      targetPerf: 500000,
+      hasTarget: true,
+      maxBenefit: null,
+      benefitUnit: "포인트",
+      guide: "전월 50만 원 이상 시 1~1.2% 빅포인트 적립. 세금, 공과금, 등록금, 상품권 실적 제외.",
+      options: [
+        { value: "AUTO", label: "기본 1.2% 빅포인트 적립" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['세금', '공과금', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        return { isPerf: true, benefit: Math.round(amount * 0.012), reason: '빅포인트 1.2%' };
+      }
+    },
+    shinhan_kakaobank: {
+      name: "신한 카카오뱅크",
+      targetPerf: 400000,
+      hasTarget: true,
+      maxBenefit: 50000,
+      benefitUnit: "캐시백",
+      guide: "전월 40만 원 이상 시 결제 건수별 캐시백. 국세, 지방세, 관리비, 상품권 제외.",
+      options: [
+        { value: "AUTO", label: "결제 건수 카운팅 대상 결제" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['국세', '지방세', '관리비', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        return { isPerf: true, benefit: 0, reason: '건수 카운팅' };
+      }
+    },
+    shinhan_toss: {
+      name: "신한 토스 카드",
+      targetPerf: 300000,
+      hasTarget: true,
+      maxBenefit: 20000,
+      benefitUnit: "토스P",
+      guide: "전월 30만 원 이상 시 생활 가맹점 캐시백. 공과금, 아파트관리비, 상품권 제외.",
+      options: [
+        { value: "AUTO", label: "생활 가맹점 캐시백 대상 결제" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['공과금', '관리비', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        return { isPerf: true, benefit: Math.round(amount * 0.01), reason: '기본 캐시백' };
+      }
+    },
+    hana_jade_classic: {
+      name: "하나 JADE Classic",
+      targetPerf: 500000,
+      hasTarget: true,
+      maxBenefit: null,
+      benefitUnit: "하나머니",
+      guide: "전월 50만 원 이상 시 국내 1.0% 적립. 세금, 공과금, 상품권 실적 제외.",
+      options: [
+        { value: "AUTO", label: "국내 1% 하나머니 적립" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['국세', '지방세', '공과금', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        return { isPerf: true, benefit: Math.round(amount * 0.01), reason: '하나머니 1%' };
+      }
+    },
+    hana_mgs: {
+      name: "하나 MG+S",
+      targetPerf: 300000,
+      hasTarget: true,
+      maxBenefit: 20000,
+      benefitUnit: "할인",
+      guide: "전월 30만 원 이상 시 마트/주유/생활 할인 제공. 세금, 공과금 실적 제외.",
+      options: [
+        { value: "AUTO", label: "마트/주유/생활 할인 대상" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['공과금', '세금', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        return { isPerf: true, benefit: 0, reason: '일반실적' };
+      }
+    },
+    hyundai_koreanair: {
+      name: "현대 대한항공카드 030",
+      targetPerf: 500000,
+      hasTarget: true,
+      maxBenefit: null,
+      benefitUnit: "마일",
+      guide: "전월 50만 원 이상 시 1,000원당 1마일리지 적립. 세금, 공과금, 등록금, 상품권 제외.",
+      options: [
+        { value: "AUTO", label: "대한항공 마일리지 1,000원당 1마일" }
+      ],
+      ruleLogic: (merchant, amount, cat) => {
+        if (cat === 'EXCLUDE' || ['세금', '공과금', '등록금', '상품권'].some(k => merchant.includes(k))) return { isPerf: false, benefit: 0, reason: '실적제외' };
+        const miles = Math.floor(amount / 1000);
+        return { isPerf: true, benefit: miles, reason: `${miles}마일` };
+      }
+    }
+  };
+
+  let currentCardId = localStorage.getItem('selected_card') || 'kb_biz';
+  let allRecords = JSON.parse(localStorage.getItem('card_records') || '[]');
+
+  const cardSelect = document.getElementById('cardSelect');
+  const ruleGuide = document.getElementById('ruleGuide');
+  const recordForm = document.getElementById('recordForm');
+  const categoryInput = document.getElementById('categoryInput');
+  const tableBody = document.getElementById('tableBody');
+  const displayPerf = document.getElementById('displayPerf');
+  const statusPerf = document.getElementById('statusPerf');
+  const perfGauge = document.getElementById('perfGauge');
+  const displayBenefit = document.getElementById('displayBenefit');
+  const statusBenefit = document.getElementById('statusBenefit');
+  const benefitGauge = document.getElementById('benefitGauge');
+  const displaySpent = document.getElementById('displaySpent');
+  const clearBtn = document.getElementById('clearBtn');
+
+  // 카드 목록 렌더링
+  Object.keys(CARD_DATABASE).forEach(key => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = CARD_DATABASE[key].name;
+    if (key === currentCardId) opt.selected = true;
+    cardSelect.appendChild(opt);
+  });
+
+  // 해당 카드의 전용 혜택 옵션만 드롭다운에 표시하는 함수
+  function updateCategoryOptions() {
+    const card = CARD_DATABASE[currentCardId];
+    categoryInput.innerHTML = '';
+    
+    // 카드 고유 옵션
+    if (card.options) {
+      card.options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        categoryInput.appendChild(opt);
+      });
+    }
+
+    // 공통 옵션 추가
+    const optGen = document.createElement('option');
+    optGen.value = 'GENERAL';
+    optGen.textContent = '일반 결제 (실적인정)';
+    categoryInput.appendChild(optGen);
+
+    const optExc = document.createElement('option');
+    optExc.value = 'EXCLUDE';
+    optExc.textContent = '상품권/세금/공과금 (실적제외)';
+    categoryInput.appendChild(optExc);
+  }
+
+  // 카드 변경 이벤트
+  cardSelect.addEventListener('change', (e) => {
+    currentCardId = e.target.value;
+    localStorage.setItem('selected_card', currentCardId);
+    updateCategoryOptions();
+    render();
+  });
+
+  // 내역 추가
+  recordForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const merchant = document.getElementById('merchantInput').value.trim();
+    const amount = parseInt(document.getElementById('amountInput').value, 10);
+    const category = categoryInput.value;
+
+    if (!merchant || isNaN(amount) || amount <= 0) return;
+
+    const card = CARD_DATABASE[currentCardId];
+    const evalResult = card.ruleLogic(merchant, amount, category);
+
+    allRecords.unshift({
+      id: Date.now(),
+      cardId: currentCardId,
+      merchant,
+      amount,
+      isPerf: evalResult.isPerf,
+      benefit: evalResult.benefit,
+      reason: evalResult.reason
+    });
+
+    localStorage.setItem('card_records', JSON.stringify(allRecords));
+    render();
+    recordForm.reset();
+  });
+
+  window.deleteRecord = function(id) {
+    allRecords = allRecords.filter(r => r.id !== id);
+    localStorage.setItem('card_records', JSON.stringify(allRecords));
+    render();
+  };
+
+  clearBtn.addEventListener('click', () => {
+    if (confirm('현재 카드의 내역을 모두 지우시겠습니까?')) {
+      allRecords = allRecords.filter(r => r.cardId !== currentCardId);
+      localStorage.setItem('card_records', JSON.stringify(allRecords));
+      render();
+    }
+  });
+
+  function render() {
+    const card = CARD_DATABASE[currentCardId];
+    ruleGuide.textContent = `💡 [약관] ${card.guide}`;
+
+    const records = allRecords.filter(r => r.cardId === currentCardId);
+    let totalSpent = 0;
+    let totalPerf = 0;
+    let totalBenefit = 0;
+
+    tableBody.innerHTML = '';
+
+    if (records.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="5" class="empty-state">내역이 없습니다. 위에서 등록하세요.</td></tr>`;
+    } else {
+      records.forEach(r => {
+        totalSpent += r.amount;
+        if (r.isPerf) totalPerf += r.amount;
+
+        let appliedBenefit = r.benefit;
+        if (card.maxBenefit && (totalBenefit + r.benefit > card.maxBenefit)) {
+          appliedBenefit = Math.max(0, card.maxBenefit - totalBenefit);
+        }
+        totalBenefit += appliedBenefit;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${r.merchant}</strong><br><small style="color:#868e96">${r.reason}</small></td>
+          <td>${r.amount.toLocaleString()}원</td>
+          <td>${appliedBenefit > 0 ? '+' + appliedBenefit.toLocaleString() : '-'}</td>
+          <td><span class="badge ${r.isPerf ? 'badge-ok' : 'badge-no'}">${r.isPerf ? '인정' : '제외'}</span></td>
+          <td><button class="btn-del" onclick="deleteRecord(${r.id})">×</button></td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    displaySpent.textContent = `${totalSpent.toLocaleString()}원`;
+
+    // 1. 인정 실적 게이지 계산 및 반영
+    if (!card.hasTarget) {
+      displayPerf.textContent = `${totalSpent.toLocaleString()}원`;
+      statusPerf.textContent = card.targetPerf > 0 
+        ? `권장한도: ${card.targetPerf.toLocaleString()}원 (${totalSpent >= card.targetPerf ? '충족' : (card.targetPerf - totalSpent).toLocaleString() + '원 남음'})` 
+        : '실적 조건 없음';
+      statusPerf.style.color = 'var(--success)';
+      perfGauge.style.width = card.targetPerf > 0 ? `${Math.min(100, Math.round((totalSpent / card.targetPerf) * 100))}%` : '100%';
+    } else {
+      displayPerf.textContent = `${totalPerf.toLocaleString()} / ${card.targetPerf.toLocaleString()}원`;
+      const perfPct = Math.min(100, Math.round((totalPerf / card.targetPerf) * 100));
+      perfGauge.style.width = `${perfPct}%`;
+
+      if (totalPerf >= card.targetPerf) {
+        statusPerf.textContent = `목표 실적 달성 완료! (100%)`;
+        statusPerf.style.color = 'var(--success)';
+      } else {
+        statusPerf.textContent = `${(card.targetPerf - totalPerf).toLocaleString()}원 부족 (${perfPct}%)`;
+        statusPerf.style.color = 'var(--danger)';
+      }
+    }
+
+    // 2. 챙긴 혜택 게이지 계산 및 반영
+    const unit = card.benefitUnit;
+    displayBenefit.textContent = `${totalBenefit.toLocaleString()}${unit}`;
+    
+    if (card.maxBenefit) {
+      const benefitPct = Math.min(100, Math.round((totalBenefit / card.maxBenefit) * 100));
+      benefitGauge.style.width = `${benefitPct}%`;
+      const remaining = card.maxBenefit - totalBenefit;
+      statusBenefit.textContent = remaining > 0 ? `잔여 한도: ${remaining.toLocaleString()}${unit} (${benefitPct}%)` : `한도 도달 (100%)`;
+      statusBenefit.style.color = remaining > 0 ? 'var(--primary)' : 'var(--warn)';
+    } else {
+      benefitGauge.style.width = totalBenefit > 0 ? '100%' : '0%';
+      statusBenefit.textContent = '적립 한도 없음';
+      statusBenefit.style.color = 'var(--success)';
+    }
+  }
+
+  // 초기 로드
+  updateCategoryOptions();
+  render();
+</script>
+</body>
+</html>
